@@ -20,6 +20,21 @@ TRANSCRIPTION_MODEL = os.environ.get(
     "GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo"
 )
 ALLOWED_IMAGE_TYPES = ("jpg", "jpeg", "png", "webp")
+AUDIO_EXTENSIONS = {
+    "audio/flac": "flac",
+    "audio/m4a": "m4a",
+    "audio/mp3": "mp3",
+    "audio/mp4": "mp4",
+    "audio/mpeg": "mp3",
+    "audio/ogg": "ogg",
+    "audio/opus": "opus",
+    "audio/wav": "wav",
+    "audio/wave": "wav",
+    "audio/webm": "webm",
+    "audio/x-flac": "flac",
+    "audio/x-m4a": "m4a",
+    "audio/x-wav": "wav",
+}
 DATABASE_PATH = Path(
     os.environ.get(
         "CHATBOT_DB_PATH", str(Path(__file__).with_name("chatbot_history.sqlite3"))
@@ -210,8 +225,12 @@ def request_answer(
 def transcribe_audio(
     client: groq.Groq, audio_bytes: bytes, mime_type: str
 ) -> str:
+    normalized_mime = mime_type.split(";", maxsplit=1)[0].strip().lower()
+    extension = AUDIO_EXTENSIONS.get(normalized_mime)
+    if extension is None:
+        raise ValueError(f"Unsupported recording format: {mime_type or 'unknown'}.")
     transcript = client.audio.transcriptions.create(
-        file=("voice-message", audio_bytes, mime_type),
+        file=(f"voice-message.{extension}", audio_bytes, normalized_mime),
         model=TRANSCRIPTION_MODEL,
         response_format="text",
     )
@@ -348,7 +367,7 @@ def main() -> None:
                         transcript = transcribe_audio(
                             client, audio_bytes, audio.type or "audio/wav"
                         )
-                    except groq.APIError as error:
+                    except (groq.APIError, ValueError) as error:
                         st.error(f"Voice transcription failed: {error}")
                     else:
                         st.session_state["audio_digest"] = digest
