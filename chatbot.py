@@ -328,8 +328,53 @@ def main() -> None:
     st.markdown(
         """
         <style>
-        .stApp { background: #f7f8fc; }
-        [data-testid="stSidebar"] { background: #f0f2f8; }
+        :root {
+            color-scheme: dark;
+            --background-color: #0e1117;
+            --secondary-background-color: #171b24;
+            --text-color: #f1f3f8;
+        }
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"] {
+            background: #0e1117;
+            color: #f1f3f8;
+        }
+        [data-testid="stHeader"] { background: rgba(14, 17, 23, .9); }
+        [data-testid="stSidebar"] { background: #171b24; }
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] label,
+        [data-testid="stMarkdown"],
+        [data-testid="stCaption"] { color: #d5d9e2; }
+        [data-testid="stChatMessage"],
+        [data-testid="stForm"],
+        [data-testid="stFileUploader"],
+        [data-testid="stAudioInput"],
+        [data-testid="stCameraInput"] {
+            background: #171b24;
+            border-color: #303746;
+        }
+        [data-testid="stChatInput"] textarea,
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea,
+        [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+            background: #171b24;
+            color: #f1f3f8;
+            border-color: #394150;
+        }
+        [data-testid="stTabs"] button { color: #d5d9e2; }
+        [data-testid="stButton"] button,
+        [data-testid="stFormSubmitButton"] button {
+            background: #202633;
+            color: #f1f3f8;
+            border-color: #394150;
+        }
+        [data-testid="stButton"] button:hover,
+        [data-testid="stFormSubmitButton"] button:hover {
+            background: #2a3343;
+            border-color: #59677d;
+            color: #fff;
+        }
         .block-container { max-width: 900px; padding-top: 2rem; }
         </style>
         """,
