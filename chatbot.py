@@ -14,7 +14,7 @@ import streamlit as st
 APP_TITLE = "Chat Space"
 LOCAL_WORKSPACE = "local"
 CHAT_MODEL = os.environ.get(
-    "GROQ_CHAT_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"
+    "GROQ_CHAT_MODEL", "qwen/qwen3.8-27b"
 )
 TRANSCRIPTION_MODEL = os.environ.get(
     "GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo"
