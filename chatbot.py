@@ -1,9 +1,6 @@
 import base64
 import hashlib
-import hmac
 import os
-import re
-import secrets
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -15,13 +12,13 @@ import streamlit as st
 
 
 APP_TITLE = "Chat Space"
+LOCAL_WORKSPACE = "local"
 CHAT_MODEL = os.environ.get(
     "GROQ_CHAT_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"
 )
 TRANSCRIPTION_MODEL = os.environ.get(
     "GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo"
 )
-PASSWORD_ITERATIONS = 600_000
 ALLOWED_IMAGE_TYPES = ("jpg", "jpeg", "png", "webp")
 DATABASE_PATH = Path(
     os.environ.get(
@@ -78,61 +75,15 @@ def initialize_database() -> None:
                 ON messages(chat_id, id);
             """
         )
-
-
-def password_digest(password: str, salt: bytes) -> bytes:
-    return hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS
-    )
-
-
-def normalize_username(username: str) -> str:
-    return username.strip().casefold()
-
-
-def valid_username(username: str) -> bool:
-    return re.fullmatch(r"[a-zA-Z0-9_-]{3,32}", username) is not None
-
-
-def create_account(username: str, password: str) -> tuple[bool, str]:
-    username = normalize_username(username)
-    if not valid_username(username):
-        return False, "Use 3–32 letters, numbers, underscores, or hyphens for your username."
-    if len(password) < 10:
-        return False, "Your password must be at least 10 characters long."
-    if len(password) > 128:
-        return False, "Your password must be 128 characters or fewer."
-
-    salt = secrets.token_bytes(16)
-    digest = password_digest(password, salt)
-    try:
-        with database() as connection:
-            connection.execute(
-                "INSERT INTO users (username, password_salt, password_hash) "
-                "VALUES (?, ?, ?)",
-                (username, salt, digest),
-            )
-    except sqlite3.IntegrityError:
-        return False, "That username is already registered."
-    return True, username
-
-
-def authenticate(username: str, password: str) -> str | None:
-    username = normalize_username(username)
-    if len(password) > 128:
-        return None
-    with database() as connection:
-        user = connection.execute(
-            "SELECT username, password_salt, password_hash FROM users "
-            "WHERE username = ?",
-            (username,),
-        ).fetchone()
-    if user is None:
-        return None
-    candidate = password_digest(password, user["password_salt"])
-    if not hmac.compare_digest(candidate, user["password_hash"]):
-        return None
-    return user["username"]
+        connection.execute(
+            "INSERT OR IGNORE INTO users "
+            "(username, password_salt, password_hash) VALUES (?, ?, ?)",
+            (LOCAL_WORKSPACE, b"", b""),
+        )
+        connection.execute(
+            "UPDATE chats SET username = ? WHERE username != ?",
+            (LOCAL_WORKSPACE, LOCAL_WORKSPACE),
+        )
 
 
 def create_chat(username: str) -> str:
@@ -256,54 +207,6 @@ def request_answer(
     return answer
 
 
-def login_page() -> None:
-    st.title("Welcome to Chat Space")
-    st.caption("Sign in to chat, save your conversations, and pick them up later.")
-    sign_in, sign_up = st.tabs(["Sign in", "Create account"])
-
-    with sign_in:
-        with st.form("sign_in_form"):
-            username = st.text_input("Username", key="login_username")
-            password = st.text_input("Password", type="password", key="login_password")
-            submitted = st.form_submit_button("Sign in", use_container_width=True)
-        if submitted:
-            user = authenticate(username, password)
-            if user is None:
-                st.error("Username or password is incorrect.")
-            else:
-                st.session_state["username"] = user
-                st.rerun()
-
-    with sign_up:
-        with st.form("create_account_form"):
-            username = st.text_input("Choose a username", key="signup_username")
-            password = st.text_input(
-                "Choose a password",
-                type="password",
-                max_chars=128,
-                key="signup_password",
-            )
-            confirmation = st.text_input(
-                "Confirm password",
-                type="password",
-                max_chars=128,
-                key="signup_confirmation",
-            )
-            submitted = st.form_submit_button(
-                "Create account", use_container_width=True
-            )
-        if submitted:
-            if password != confirmation:
-                st.error("The passwords do not match.")
-            else:
-                created, result = create_account(username, password)
-                if not created:
-                    st.error(result)
-                else:
-                    st.session_state["username"] = result
-                    st.rerun()
-
-
 def transcribe_audio(
     client: groq.Groq, audio_bytes: bytes, mime_type: str
 ) -> str:
@@ -382,15 +285,11 @@ def main() -> None:
     )
     initialize_database()
 
-    if "username" not in st.session_state:
-        login_page()
-        return
-
-    username = st.session_state["username"]
+    username = LOCAL_WORKSPACE
     api_key = os.environ.get("GROQ_API_KEY", "").strip()
     with st.sidebar:
         st.title("💬 Chat Space")
-        st.caption(f"Signed in as **{username}**")
+        st.caption("Your local chat workspace")
         if st.button("＋ New chat", use_container_width=True):
             st.session_state["selected_chat_id"] = create_chat(username)
             st.rerun()
@@ -414,10 +313,6 @@ def main() -> None:
             st.caption("AI is ready.")
         else:
             st.warning("Set the GROQ_API_KEY environment variable to enable AI.")
-        if st.button("Sign out", use_container_width=True):
-            for key in ("username", "selected_chat_id", "audio_digest", "draft"):
-                st.session_state.pop(key, None)
-            st.rerun()
 
     if not chat_ids:
         selected_id = create_chat(username)
