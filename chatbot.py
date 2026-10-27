@@ -132,6 +132,22 @@ def load_messages(chat_id: str, username: str) -> list[sqlite3.Row]:
         ).fetchall()
 
 
+def clear_chat(chat_id: str, username: str) -> None:
+    with database() as connection:
+        chat = connection.execute(
+            "SELECT id FROM chats WHERE id = ? AND username = ?",
+            (chat_id, username),
+        ).fetchone()
+        if chat is None:
+            raise ValueError("The selected chat does not belong to this account.")
+        connection.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+        connection.execute(
+            "UPDATE chats SET title = 'New chat', updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?",
+            (chat_id,),
+        )
+
+
 def save_exchange(
     chat_id: str,
     username: str,
@@ -338,7 +354,31 @@ def main() -> None:
         st.session_state["selected_chat_id"] = selected_id
         st.rerun()
 
-    st.title("What can I help with?")
+    history = load_messages(selected_id, username)
+    title_col, action_col = st.columns([4, 1])
+    with title_col:
+        st.title("What can I help with?")
+    with action_col:
+        if st.button(
+            "Clear chat",
+            use_container_width=True,
+            disabled=not history,
+        ):
+            st.session_state["confirm_clear_chat_id"] = selected_id
+    if st.session_state.get("confirm_clear_chat_id") == selected_id:
+        st.warning("This will permanently clear the messages in this chat.")
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button("Clear conversation", type="primary"):
+            clear_chat(selected_id, username)
+            st.session_state.pop("confirm_clear_chat_id", None)
+            st.session_state["draft"] = ""
+            st.rerun()
+        if cancel_col.button("Cancel"):
+            st.session_state.pop("confirm_clear_chat_id", None)
+            st.rerun()
+    elif st.session_state.get("confirm_clear_chat_id") is not None:
+        st.session_state.pop("confirm_clear_chat_id")
+
     st.caption("Ask a question, record a voice message, or share a photo.")
     if not api_key:
         st.info(
@@ -346,7 +386,6 @@ def main() -> None:
             "in your environment and restart Streamlit."
         )
 
-    history = load_messages(selected_id, username)
     for message in history:
         render_message(message)
 
